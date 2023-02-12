@@ -21,8 +21,10 @@ class MapPainter extends CustomPainter {
     ..strokeWidth = scaleFactor * 20.0
     ..style = PaintingStyle.stroke;
 
+  static const backgroundColor = Color(0xfffffffc);
+
   Paint get boundPaint => Paint()
-    ..color = Colors.black
+    ..color = backgroundColor
     ..strokeWidth = scaleFactor * 10.0
     ..style = PaintingStyle.stroke;
 
@@ -30,18 +32,23 @@ class MapPainter extends CustomPainter {
     ..color = Colors.green.shade50
     ..style = PaintingStyle.fill;
 
-  // TODO: Compute zoom level
-  int get zoomLevel => 4;
-  int get gridSize => pow(2, zoomLevel).toInt();
-  double get tileSize => 256.0 / gridSize;
-  double get scale => _position.zoom;
+  double get zoomLevel => _position.zoom - 1;
+  double get gridSize => zoomLevel * zoomLevel;
+  double get tileSize => 256.0;
+  double get scale => (_position.zoom % 1) + 1;
 
   double get scaleFactor => 1 / scale;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final dx = -_position.pan.dx * scale;
-    final dy = -_position.pan.dy * scale;
+    canvas.drawPaint(boundPaint);
+
+    final cx = size.width / 2;
+    final cy = size.width / 2;
+    final dx = -_position.pan.dx - cx;
+    final dy = -_position.pan.dy - cy;
+    final bx = (-_position.pan.dx - cx) / scale;
+    final by = (-_position.pan.dy - cy) / scale;
 
     canvas.save();
 
@@ -50,22 +57,36 @@ class MapPainter extends CustomPainter {
     canvas.translate(-dx, -dy);
     canvas.scale(scale);
 
-    final bounds = Rectangle<double>.fromPoints(Point(dx, dy), Point(dx + size.width, dy + size.height));
+    final bounds = Rectangle<double>.fromPoints(Point(bx, by), Point(bx + size.width / scale, by + size.height / scale));
 
     for (int row = 0; row < gridSize; row++) {
       for (int col = 0; col < gridSize; col++) {
         final double top = (row * tileSize).toDouble();
         final double left = (col * tileSize).toDouble();
         final box = Rectangle(
-          left * scale,
-          top * scale,
-          tileSize * scale,
-          tileSize * scale,
+          left,
+          top,
+          tileSize,
+          tileSize,
         );
+        // bbox debug
+        // canvas.drawRect(Rect.fromLTWH(box.left, box.top, box.width, box.height), Paint()..color = Colors.green.withOpacity(.5));
         if (!bounds.intersects(box)) continue;
-        paintTile(canvas, zoomLevel, col, row);
+        paintTile(canvas, zoomLevel.floor(), col, row);
+        // bbox debug
+        // canvas.drawRect(Rect.fromLTWH(box.left, box.top, box.width, box.height), Paint()..color = Colors.blue.withOpacity(.5));
       }
     }
+
+    // bbox debug
+    // final p1 = Paint()
+    //   ..color = Colors.red.withOpacity(.5)
+    //   ..style = PaintingStyle.stroke
+    //   ..strokeWidth = 2 * scaleFactor;
+    // canvas.drawRect(Rect.fromLTWH(bounds.left, bounds.top, bounds.width, bounds.height), p1);
+    // canvas.drawLine(Offset(bounds.left, bounds.top), Offset(bounds.right, bounds.bottom), p1);
+    // canvas.drawLine(Offset(bounds.right, bounds.top), Offset(bounds.left, bounds.bottom), p1);
+    // end
 
     canvas.restore();
 
@@ -84,6 +105,7 @@ class MapPainter extends CustomPainter {
     final double top = (row * tileSize).toDouble();
     final double left = (col * tileSize).toDouble();
     canvas.drawRect(Rect.fromLTWH(left, top, tileSize, tileSize), Paint()..color = const Color(0xfffffffc));
+    canvas.drawRect(Rect.fromLTWH(left, top, tileSize, tileSize), boundPaint..strokeWidth = scaleFactor);
 
     final tile = _resolveTile(zoom, col, row);
 
@@ -93,7 +115,6 @@ class MapPainter extends CustomPainter {
       canvas.save();
       canvas.scale(pixelsPerTileUnit);
       canvas.translate((col * layer.extent).toDouble(), (row * layer.extent).toDouble());
-      print(layer.name);
 
       for (final feature in layer.features) {
         if (feature.type == Tile_GeomType.POLYGON) {
@@ -128,8 +149,6 @@ class MapPainter extends CustomPainter {
     );
     text.layout();
     text.paint(canvas, Offset(left + scaleFactor * 10, top + scaleFactor * 10));
-
-    canvas.drawRect(Rect.fromLTWH(left, top, tileSize, tileSize), boundPaint..strokeWidth = scaleFactor * 0.1);
   }
 
   @override

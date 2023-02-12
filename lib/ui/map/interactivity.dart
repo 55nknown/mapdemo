@@ -42,7 +42,7 @@ class _InteractivityState extends State<Interactivity> {
         setState(() {
           _position.angle = _activeAngle + details.rotation;
           _position.zoom = _activeZoom * details.scale;
-          _position.pan += details.focalPointDelta / _position.zoom;
+          _position.pan += details.focalPointDelta;
         });
       },
       onScaleEnd: (details) {
