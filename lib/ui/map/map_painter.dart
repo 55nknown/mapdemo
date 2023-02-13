@@ -58,7 +58,7 @@ class MapPainter extends CustomPainter {
   double get zoom => (_position.zoom - 1.0).clamp(0, 14);
   int get zoomLevel => zoom.floor();
   int get gridSize => pow(2, zoomLevel).toInt();
-  double get tileSize => 1024.0;
+  double get tileSize => 512.0;
   double get scale => zoom % 1 + 1;
 
   double get scaleFactor => 1 / scale;
