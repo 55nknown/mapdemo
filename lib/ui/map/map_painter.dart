@@ -7,7 +7,30 @@ import 'package:mapdemo/ui/map/interactivity.dart';
 
 typedef TileResolver = Tile Function(int zoom, int col, int row);
 
-// TODO: Optimize performance
+Offset rotatePoint(Offset o, double ang) => Offset(
+      o.dx * cos(ang) - o.dy * sin(ang),
+      o.dy * cos(ang) + o.dx * sin(ang),
+    );
+Rect transformRotate(Rect r, double a) {
+  final r1 = Rect.fromPoints(
+    rotatePoint(r.topLeft, -a),
+    rotatePoint(r.bottomRight, -a),
+  );
+  final r2 = Rect.fromPoints(
+    rotatePoint(r.bottomLeft, -a),
+    rotatePoint(r.topRight, -a),
+  );
+  final r3 = Rect.fromPoints(
+    rotatePoint(r.topLeft, a),
+    rotatePoint(r.bottomRight, a),
+  );
+  final r4 = Rect.fromPoints(
+    rotatePoint(r.bottomLeft, a),
+    rotatePoint(r.topRight, a),
+  );
+  return r.expandToInclude(r1).expandToInclude(r2).expandToInclude(r3).expandToInclude(r4);
+}
+
 class MapPainter extends CustomPainter {
   final Position _position;
   final TileResolver _resolveTile;
@@ -17,25 +40,26 @@ class MapPainter extends CustomPainter {
         _resolveTile = resolver;
 
   Paint get outlinePaint => Paint()
-    ..color = Colors.red
+    ..color = Colors.white
     ..strokeWidth = scaleFactor * 20.0
     ..style = PaintingStyle.stroke;
 
-  static const backgroundColor = Color(0xfffffffc);
+  static const backgroundColor = Color(0xff0f1a20);
 
   Paint get boundPaint => Paint()
-    ..color = backgroundColor
-    ..strokeWidth = scaleFactor * 10.0
+    ..color = Colors.white
+    ..strokeWidth = scaleFactor * 2.0
     ..style = PaintingStyle.stroke;
 
   Paint get fillPaint => Paint()
     ..color = Colors.green.shade50
     ..style = PaintingStyle.fill;
 
-  double get zoomLevel => _position.zoom - 1;
-  double get gridSize => zoomLevel * zoomLevel;
+  double get zoom => (_position.zoom - 1.0).clamp(0, 14);
+  int get zoomLevel => zoom.floor();
+  int get gridSize => pow(2, zoomLevel).toInt();
   double get tileSize => 256.0;
-  double get scale => (_position.zoom % 1) + 1;
+  double get scale => zoom % 1 + 1;
 
   double get scaleFactor => 1 / scale;
 
@@ -43,56 +67,62 @@ class MapPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     canvas.drawPaint(boundPaint);
 
-    final cx = size.width / 2;
-    final cy = size.width / 2;
-    final dx = -_position.pan.dx - cx;
-    final dy = -_position.pan.dy - cy;
-    final bx = (-_position.pan.dx - cx) / scale;
-    final by = (-_position.pan.dy - cy) / scale;
+    final center = Offset(size.width / 2, size.height / 2);
+    final pan = Offset(-_position.pan.dx, -_position.pan.dy) * pow(2, zoomLevel).toDouble();
+    final offset = -pan + center;
 
     canvas.save();
 
-    // canvas.rotate(_position.angle);
-
-    canvas.translate(-dx, -dy);
+    canvas.translate(center.dx, center.dy);
+    canvas.rotate(_position.angle);
     canvas.scale(scale);
+    canvas.translate(-center.dx, -center.dy);
+    canvas.translate(offset.dx, offset.dy);
 
-    final bounds = Rectangle<double>.fromPoints(Point(bx, by), Point(bx + size.width / scale, by + size.height / scale));
+    // bbox size
+    final w = size.width;
+    final h = size.height;
 
-    for (int row = 0; row < gridSize; row++) {
-      for (int col = 0; col < gridSize; col++) {
-        final double top = (row * tileSize).toDouble();
-        final double left = (col * tileSize).toDouble();
-        final box = Rectangle(
-          left,
-          top,
-          tileSize,
-          tileSize,
-        );
-        // bbox debug
-        // canvas.drawRect(Rect.fromLTWH(box.left, box.top, box.width, box.height), Paint()..color = Colors.green.withOpacity(.5));
-        if (!bounds.intersects(box)) continue;
-        paintTile(canvas, zoomLevel.floor(), col, row);
-        // bbox debug
-        // canvas.drawRect(Rect.fromLTWH(box.left, box.top, box.width, box.height), Paint()..color = Colors.blue.withOpacity(.5));
+    // define bbox to be centered
+    Rect bounds = Rect.fromLTWH(-w / 2, -h / 2, w, h);
+
+    // transform bbox to include rotated areas
+    bounds = transformRotate(bounds, _position.angle);
+
+    // translate bbox to position
+    bounds = bounds.shift(Offset(-offset.dx + w / 2, -offset.dy + h / 2));
+
+    final minRow = max((bounds.top / tileSize).floor(), 0);
+    final minCol = max((bounds.left / tileSize).floor(), 0);
+    final maxRow = min(minRow + ((bounds.bottom - bounds.top) / tileSize).ceil() + 1, gridSize);
+    final maxCol = min(minCol + ((bounds.right - bounds.left) / tileSize).ceil() + 2, gridSize);
+
+    int drawCount = 0;
+
+    for (int row = minRow; row < maxRow; row++) {
+      for (int col = minCol; col < maxCol; col++) {
+        // 0.5 * (pow(2, zoomLevel) - 1) * -tileSize;
+        paintTile(canvas, col, row);
+
+        drawCount++;
       }
     }
 
     // bbox debug
-    // final p1 = Paint()
-    //   ..color = Colors.red.withOpacity(.5)
-    //   ..style = PaintingStyle.stroke
-    //   ..strokeWidth = 2 * scaleFactor;
-    // canvas.drawRect(Rect.fromLTWH(bounds.left, bounds.top, bounds.width, bounds.height), p1);
-    // canvas.drawLine(Offset(bounds.left, bounds.top), Offset(bounds.right, bounds.bottom), p1);
-    // canvas.drawLine(Offset(bounds.right, bounds.top), Offset(bounds.left, bounds.bottom), p1);
+    final p1 = Paint()
+      ..color = Colors.green.withOpacity(.5)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2 * scaleFactor;
+    canvas.drawRect(bounds, p1);
+    canvas.drawLine(bounds.topLeft, bounds.bottomRight, p1);
+    canvas.drawLine(bounds.topRight, bounds.bottomLeft, p1);
     // end
 
     canvas.restore();
 
     final text = TextPainter(
       text: TextSpan(
-        text: "$zoomLevel\n$scale\n${dx.toStringAsFixed(2)}, ${dy.toStringAsFixed(2)}",
+        text: "Tiles: $drawCount\nZoom: $zoomLevel\nScale: $scale\nx: ${pan.dx.toStringAsFixed(2)}, y: ${pan.dy.toStringAsFixed(2)}",
         style: const TextStyle(color: Colors.grey),
       ),
       textDirection: TextDirection.ltr,
@@ -101,20 +131,21 @@ class MapPainter extends CustomPainter {
     text.paint(canvas, Offset(size.width / 2 - text.width / 2, size.height - text.height - 50));
   }
 
-  void paintTile(Canvas canvas, int zoom, int col, int row) async {
-    final double top = (row * tileSize).toDouble();
-    final double left = (col * tileSize).toDouble();
-    canvas.drawRect(Rect.fromLTWH(left, top, tileSize, tileSize), Paint()..color = const Color(0xfffffffc));
-    canvas.drawRect(Rect.fromLTWH(left, top, tileSize, tileSize), boundPaint..strokeWidth = scaleFactor);
+  void paintTile(Canvas canvas, int col, int row) async {
+    final double left = (col * tileSize);
+    final double top = (row * tileSize);
+    final box = Rect.fromLTWH(left, top, tileSize, tileSize);
+    canvas.drawRect(box, Paint()..color = backgroundColor);
+    canvas.drawRect(box, boundPaint..strokeWidth = scaleFactor);
 
-    final tile = _resolveTile(zoom, col, row);
+    final tile = _resolveTile(zoomLevel, col, row);
 
     for (final layer in tile.layers) {
       final pixelsPerTileUnit = 1 / layer.extent * tileSize;
 
       canvas.save();
+      canvas.translate(left, top);
       canvas.scale(pixelsPerTileUnit);
-      canvas.translate((col * layer.extent).toDouble(), (row * layer.extent).toDouble());
 
       for (final feature in layer.features) {
         if (feature.type == Tile_GeomType.POLYGON) {
@@ -139,7 +170,7 @@ class MapPainter extends CustomPainter {
 
     final text = TextPainter(
       text: TextSpan(
-        text: "Tile $zoom/$col/$row",
+        text: "Tile $zoomLevel/$col/$row",
         style: TextStyle(
           color: Colors.grey,
           fontSize: scaleFactor * 10,
