@@ -47,18 +47,18 @@ class MapPainter extends CustomPainter {
   static const backgroundColor = Color(0xff0f1a20);
 
   Paint get boundPaint => Paint()
-    ..color = Colors.white
+    ..color = backgroundColor
     ..strokeWidth = scaleFactor * 2.0
     ..style = PaintingStyle.stroke;
 
   Paint get fillPaint => Paint()
-    ..color = Colors.green.shade50
+    ..color = Colors.blueGrey.withOpacity(.1)
     ..style = PaintingStyle.fill;
 
   double get zoom => (_position.zoom - 1.0).clamp(0, 14);
   int get zoomLevel => zoom.floor();
   int get gridSize => pow(2, zoomLevel).toInt();
-  double get tileSize => 256.0;
+  double get tileSize => 1024.0;
   double get scale => zoom % 1 + 1;
 
   double get scaleFactor => 1 / scale;
@@ -95,7 +95,7 @@ class MapPainter extends CustomPainter {
     final minRow = max((bounds.top / tileSize).floor(), 0);
     final minCol = max((bounds.left / tileSize).floor(), 0);
     final maxRow = min(minRow + ((bounds.bottom - bounds.top) / tileSize).ceil() + 1, gridSize);
-    final maxCol = min(minCol + ((bounds.right - bounds.left) / tileSize).ceil() + 2, gridSize);
+    final maxCol = min(minCol + ((bounds.right - bounds.left) / tileSize).ceil() + 1, gridSize);
 
     int drawCount = 0;
 
@@ -109,13 +109,13 @@ class MapPainter extends CustomPainter {
     }
 
     // bbox debug
-    final p1 = Paint()
-      ..color = Colors.green.withOpacity(.5)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2 * scaleFactor;
-    canvas.drawRect(bounds, p1);
-    canvas.drawLine(bounds.topLeft, bounds.bottomRight, p1);
-    canvas.drawLine(bounds.topRight, bounds.bottomLeft, p1);
+    // final p1 = Paint()
+    //   ..color = Colors.green.withOpacity(.5)
+    //   ..style = PaintingStyle.stroke
+    //   ..strokeWidth = 2 * scaleFactor;
+    // canvas.drawRect(bounds, p1);
+    // canvas.drawLine(bounds.topLeft, bounds.bottomRight, p1);
+    // canvas.drawLine(bounds.topRight, bounds.bottomLeft, p1);
     // end
 
     canvas.restore();

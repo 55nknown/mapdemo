@@ -42,13 +42,13 @@ class _InteractivityState extends State<Interactivity> {
       },
       onScaleUpdate: (details) {
         setState(() {
-          // _position.angle = _activeAngle + details.rotation;
+          _position.angle = _activeAngle + details.rotation;
           _position.zoom = _activeZoom * details.scale;
           if (_position.zoom < 1.0) _position.zoom = 1.0;
           final delta = details.focalPointDelta;
           final offsetX = delta.dx * cos(_position.angle) + delta.dy * sin(_position.angle);
           final offsetY = -delta.dx * sin(_position.angle) + delta.dy * cos(_position.angle);
-          _position.pan += Offset(offsetX, offsetY) / _position.zoom;
+          _position.pan += Offset(offsetX, offsetY) / (pow(2, _position.zoom) / 2.0);
         });
       },
       onScaleEnd: (details) {
